@@ -1,0 +1,21 @@
+macro "Convert LSM510 Stack Image from LSM to TIFF" ;
+	
+	dir1 = getDirectory("Choose Source Directory ");
+	dir2 = getDirectory("Choose Destination Directory ");
+	list = getFileList(dir1);
+	for (i=0; i<list.length; i++) {
+		showProgress(i+1, list.length);
+		if (endsWith(list[i], '.lsm')) {
+			open(dir1+list[i]);
+		if (nSlices!=1) {
+			run("8-bit");
+			saveAs("tif", dir2+list[i]);
+		}
+		close();
+		close();
+		}
+		
+	}
+
+
+
