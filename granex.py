@@ -21,6 +21,7 @@ recons = itk.ReconstructionByDilatationImageFilter.US3US3.New(erode, im30)
 connected = itk.ConnectedComponentImageFilter.US3US3.New(recons)
 noyaux = itk.RelabelComponentImageFilter.US3US3.New(connected)
 # il faut faire une fermeture pour lisser les noyaux
+# TODO
 
 # les granules
 hconvex = itk.HConvexImageFilter.US3US3(median, Height=50)
