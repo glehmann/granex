@@ -47,39 +47,40 @@ nShape = itk.LabelShapeImageFilter.US3.New(noyaux)
 
 #fin de l'executable
 #ci dessous la generation de fichiers resultats
-reader.SetFileName(sys.argv[1])
+for fName in sys.argv[1:] :
+  reader.SetFileName(fName)
+  
+  gWriter = itk.ImageFileWriter.US3.New(gShape, FileName=sys.argv[1][:-4]+"-granules.tif")
+  gWriter.Update()
+  
+  nWriter = itk.ImageFileWriter.US3.New(nShape, FileName=sys.argv[1][:-4]+"-noyaux.tif")
+  nWriter.Update()
 
-gWriter = itk.ImageFileWriter.US3.New(gShape, FileName=sys.argv[1][:-4]+"-granules.tif")
-gWriter.Update()
-
-nWriter = itk.ImageFileWriter.US3.New(nShape, FileName=sys.argv[1][:-4]+"-noyaux.tif")
-nWriter.Update()
-
-for i in range(1, nShape.GetNumberOfLabels()) :
-	f = file("noyaux.txt", 'a')
-	f.write(sys.argv[1]+"\t")
-	f.write(str(i)+"\t")
-	f.write(str(nShape.GetVolume(i))+"\t")
-	for j in range(0, 3) :
-		if j != 0 :
-			f.write(",")
-		f.write(str(nShape.GetCenterOfGravity(i).GetElement(j)))
-	f.write("\t")
-	f.write("\n")
-	f.close()
-	
-for i in range(1, gShape.GetNumberOfLabels()) :
-	f = file("granules.txt", 'a')
-	f.write(sys.argv[1]+"\t")
-	f.write(str(i)+"\t")
-	f.write(str(gShape.GetVolume(i))+"\t")
-	for j in range(0, 3) :
-		if j != 0 :
-			f.write(",")
-		f.write(str(gShape.GetCenterOfGravity(i).GetElement(j)))
-	f.write("\t")
-	f.write("\n")
-	f.close()
+  for i in range(1, nShape.GetNumberOfLabels()) :
+    f = file("noyaux.txt", 'a')
+    f.write(sys.argv[1]+"\t")
+    f.write(str(i)+"\t")
+    f.write(str(nShape.GetVolume(i))+"\t")
+    for j in range(0, 3) :
+      if j != 0 :
+        f.write(",")
+      f.write(str(nShape.GetCenterOfGravity(i).GetElement(j)))
+    f.write("\t")
+    f.write("\n")
+    f.close()
+    
+  for i in range(1, gShape.GetNumberOfLabels()) :
+    f = file("granules.txt", 'a')
+    f.write(sys.argv[1]+"\t")
+    f.write(str(i)+"\t")
+    f.write(str(gShape.GetVolume(i))+"\t")
+    for j in range(0, 3) :
+      if j != 0 :
+        f.write(",")
+      f.write(str(gShape.GetCenterOfGravity(i).GetElement(j)))
+    f.write("\t")
+    f.write("\n")
+    f.close()
 	
 # bgr = itk.BinaryThresholdImageFilter.US3US3.New(grecons, LowerThreshold=1, InsideValue=4)
 # a = itk.AddImageFilter.US3US3US3.New(noyaux, bgr)
