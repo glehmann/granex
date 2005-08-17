@@ -81,6 +81,8 @@ for fName in sys.argv[1:] :
     f.write("\t")
     f.write("\n")
     f.close()
+    
+   print fName, "done."
 	
 # bgr = itk.BinaryThresholdImageFilter.US3US3.New(grecons, LowerThreshold=1, InsideValue=4)
 # a = itk.AddImageFilter.US3US3US3.New(noyaux, bgr)
