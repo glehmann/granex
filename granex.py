@@ -47,13 +47,18 @@ nShape = itk.LabelShapeImageFilter.US3.New(noyaux)
 
 #fin de l'executable
 #ci dessous la generation de fichiers resultats
+gCast = itk.CastImageFilter.US3UC3.New(gShape)
+gWriter = itk.ImageFileWriter.UC3.New(gCast)
+
+nCast = itk.CastImageFilter.US3UC3.New(nShape)
+nWriter = itk.ImageFileWriter.UC3.New(nCast)
 for fName in sys.argv[1:] :
   reader.SetFileName(fName)
   
-  gWriter = itk.ImageFileWriter.US3.New(gShape, FileName=fName[:-4]+"-granules.tif")
+  gWriter.SetFileName(fName[:-4]+"-granules.tif")
   gWriter.Update()
   
-  nWriter = itk.ImageFileWriter.US3.New(nShape, FileName=fName[:-4]+"-noyaux.tif")
+  nWriter.SetFileName(fName[:-4]+"-noyaux.tif")
   nWriter.Update()
 
   for i in range(1, nShape.GetNumberOfLabels()) :
