@@ -50,15 +50,15 @@ nShape = itk.LabelShapeImageFilter.US3.New(noyaux)
 for fName in sys.argv[1:] :
   reader.SetFileName(fName)
   
-  gWriter = itk.ImageFileWriter.US3.New(gShape, FileName=sys.argv[1][:-4]+"-granules.tif")
+  gWriter = itk.ImageFileWriter.US3.New(gShape, FileName=fName[:-4]+"-granules.tif")
   gWriter.Update()
   
-  nWriter = itk.ImageFileWriter.US3.New(nShape, FileName=sys.argv[1][:-4]+"-noyaux.tif")
+  nWriter = itk.ImageFileWriter.US3.New(nShape, FileName=fName[:-4]+"-noyaux.tif")
   nWriter.Update()
 
   for i in range(1, nShape.GetNumberOfLabels()) :
     f = file("noyaux.txt", 'a')
-    f.write(sys.argv[1]+"\t")
+    f.write(fName+"\t")
     f.write(str(i)+"\t")
     f.write(str(nShape.GetVolume(i))+"\t")
     for j in range(0, 3) :
@@ -71,7 +71,7 @@ for fName in sys.argv[1:] :
     
   for i in range(1, gShape.GetNumberOfLabels()) :
     f = file("granules.txt", 'a')
-    f.write(sys.argv[1]+"\t")
+    f.write(fName+"\t")
     f.write(str(i)+"\t")
     f.write(str(gShape.GetVolume(i))+"\t")
     for j in range(0, 3) :
