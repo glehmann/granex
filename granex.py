@@ -3,47 +3,82 @@
 import itk, sys
 itk.auto_progress=True
 reader = itk.ImageFileReader.US3.New()
+# spacing is wrong... let's fix it
+spacing = itk.Vector.D3()
+spacing.Fill(1)
+spacing[2] = 3
+changeInfo = itk.ChangeInformationImageFilter.US3.New(reader, OutputSpacing=spacing, ChangeSpacing=True)
+# resample image to be isotropic
+resample = itk.IsotropicResolutionImageFilter.US3US3.New(changeInfo, MaximumIncrease=2)
+
 # un peu de nettoyage
-median = itk.MedianImageFilter.US3US3.New(reader, Radius=2)
-r = median.GetRadius()
-r.SetElement(2, 1)
+median = itk.MedianImageFilter.US3US3.New(resample, Radius=2)
+# r = median.GetRadius()
+# r.SetElement(2, 1)
+
 # selectionne le noyau
-im30 = itk.BinaryThresholdImageFilter.US3US3.New(median, LowerThreshold=30)
-# supprime tous les petits trucs qui traine dans l'image
+nThreshold = itk.BinaryThresholdImageFilter.US3US3.New(median, LowerThreshold=30)
+# supprime tous les petits trucs qui trainent dans l'image
 kernel = itk.BinaryBallStructuringElement.US3(Radius=5)
 r = kernel.GetRadius()
-r.SetElement(2, 1)
+# r.SetElement(2, 1)
 kernel.SetRadius(r)
 kernel.CreateStructuringElement()
-erode = itk.BinaryErodeImageFilter.US3US3.New(im30, Kernel=kernel)
-recons = itk.ReconstructionByDilatationImageFilter.US3US3.New(erode, im30)
-connected = itk.ConnectedComponentImageFilter.US3US3.New(recons)
-noyaux = itk.RelabelComponentImageFilter.US3US3.New(connected)
+nOpen = itk.OpeningByReconstructionImageFilter.US3US3.New(nThreshold, Kernel=kernel)
+nConnected = itk.ConnectedComponentImageFilter.US3US3.New(nOpen)
+noyaux = itk.RelabelComponentImageFilter.US3US3.New(nConnected)
 # il faut faire une fermeture pour lisser les noyaux
-# TODO
+nClose = itk.BinaryMorphologicalClosingImageFilter.US3US3.New(nOpen, SafeBorder=True)
+nk2 = nClose.GetKernel()
+nr2 = nk2.GetRadius()
+nr2.Fill(30)
+nr2[2] = 10
+nk2.SetRadius(nr2)
+nk2.CreateStructuringElement()
+nClose.SetKernel(nk2)
+
 
 # les granules
-hconvex = itk.HConvexImageFilter.US3US3(median, Height=50)
-bGranules = itk.BinaryThresholdImageFilter.US3US3.New(hconvex, LowerThreshold=1)
-selctedHConvex = itk.AndImageFilter.US3US3US3.New(recons, bGranules)
+# gHconvex = itk.HConvexImageFilter.US3US3(median, Height=25)
+# gThreshold = itk.BinaryThresholdImageFilter.US3US3.New(gHconvex, LowerThreshold=1)
+
+# essai de top-hat
+gkernel = itk.BinaryBallStructuringElement.US3(Radius=10)
+gr = gkernel.GetRadius()
+gr.SetElement(2, 5)
+gkernel.SetRadius(gr)
+gkernel.CreateStructuringElement()
+gTopHat = itk.WhiteTopHatImageFilter.US3US3.New(median, Kernel=gkernel)
+gThreshold = itk.BinaryThresholdImageFilter.US3US3.New(gTopHat, LowerThreshold=70)
+
+gAnd = itk.AndImageFilter.US3US3US3.New(nClose, gThreshold)
 # supprime les elts trop petits
 gkernel = itk.BinaryBallStructuringElement.US3(Radius=2)
 gr = gkernel.GetRadius()
 gr.SetElement(2, 1)
 gkernel.SetRadius(gr)
 gkernel.CreateStructuringElement()
-gerode = itk.BinaryErodeImageFilter.US3US3.New(selctedHConvex, Kernel=gkernel)
-# reconstruit l'image sans les trucs trops petits
-grecons = itk.ReconstructionByDilatationImageFilter.US3US3.New(gerode, selctedHConvex)
-gConnected = itk.ConnectedComponentImageFilter.US3US3.New(grecons)
+gOpen = itk.OpeningByReconstructionImageFilter.US3US3.New(gAnd, Kernel=gkernel)
+gConnected = itk.ConnectedComponentImageFilter.US3US3.New(gOpen)
 granules = itk.RelabelComponentImageFilter.US3US3.New(gConnected)
 
 gShape = itk.LabelShapeImageFilter.US3.New(granules)
 nShape = itk.LabelShapeImageFilter.US3.New(noyaux)
 
-# reader.SetFileName("Lot3embryon4450ZOOM.tif")
+# nPad = itk
+# nPad = itk.ConstantPadImageFilter.US3US3.New(nClose, PadBound=1)
+# nInvert = itk.InvertIntensityImageFilter.US3US3.New(nPad)
+# nDistance = itk.DanielssonDistanceMapImageFilter.US3US3.New(nInvert)
+# ns = itk.Size[3]()
+# ns.Fill(1)
+# nCrop = itk.CropImageFilter.US3US3.New(nDistance, LowerBoundaryCropSize=ns, UpperBoundaryCropSize=ns)
+# nInvDist = itk.InvertIntensityImageFilter.US3US3.New(nCrop)
+# reader.SetFileName("emb-01ZOOM.tif")
+
+
 # gShape.Update()
 # nShape.Update()
+
 
 #fin de l'executable
 #ci dessous la generation de fichiers resultats
@@ -54,6 +89,8 @@ nCast = itk.CastImageFilter.US3UC3.New(nShape)
 nWriter = itk.ImageFileWriter.UC3.New(nCast)
 for fName in sys.argv[1:] :
   reader.SetFileName(fName)
+  
+  # spacing is wrong... let's fix it
   
   gWriter.SetFileName(fName[:-4]+"-granules.tif")
   gWriter.Update()
@@ -100,20 +137,24 @@ for fName in sys.argv[1:] :
 
 
 
-def GetRange(img) :
+def GetRange(img, imageType="US3") :
   import itk
-  comp = itk.MinimumMaximumImageCalculator.US3.New(Image=img)
+  img.Update()
+  try :
+    comp = itk.MinimumMaximumImageCalculator[imageType].New(Image=img.GetOutput())
+  except TypeError:
+    comp = itk.MinimumMaximumImageCalculator[imageType].New(Image=img)
   comp.Compute()
   return (comp.GetMinimum(), comp.GetMaximum())
 
 
 class Viewer :
-  def __init__(self, filt=None, Input=None, MinOpacity=0.0, MaxOpacity=0.2) :
+  def __init__(self, filt=None, Input=None, MinOpacity=0.0, MaxOpacity=0.2, imageType='US3') :
     import qt
     import vtk
     import itkvtk
     from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-    self.__imageType__ = 'US3'
+    self.__imageType__ = imageType
     self.__MinOpacity__ = MinOpacity
     self.__MaxOpacity__ = MaxOpacity
     # every QT app needs an app
