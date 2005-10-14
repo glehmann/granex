@@ -2,40 +2,45 @@
 
 import itk, sys
 itk.auto_progress=True
-reader = itk.ImageFileReader.US3.New()
+PT = itk.UC
+LPT = itk.UL
+dim = 3
+IT = itk.Image[PT, dim]
+LIT = itk.Image[LPT, dim]
+reader = itk.ImageFileReader[IT].New()
 # spacing is wrong... let's fix it
-spacing = itk.Vector.D3()
+spacing = itk.Vector[itk.D, dim]()
 spacing.Fill(1)
 spacing[2] = 3
-changeInfo = itk.ChangeInformationImageFilter.US3.New(reader, OutputSpacing=spacing, ChangeSpacing=True)
+changeInfo = itk.ChangeInformationImageFilter[IT].New(reader, OutputSpacing=spacing, ChangeSpacing=True)
 # resample image to be isotropic
-resample = itk.IsotropicResolutionImageFilter.US3US3.New(changeInfo, MaximumIncrease=2)
+resample = itk.IsotropicResolutionImageFilter[IT, IT].New(changeInfo) #, MaximumIncrease=2)
 
 # un peu de nettoyage
-median = itk.MedianImageFilter.US3US3.New(resample, Radius=2)
+median = itk.MedianImageFilter[IT, IT].New(resample, Radius=2)
 # r = median.GetRadius()
 # r.SetElement(2, 1)
 
 # selectionne le noyau
-nThreshold = itk.BinaryThresholdImageFilter.US3US3.New(median, LowerThreshold=30)
+nThreshold = itk.BinaryThresholdImageFilter[IT, IT].New(median, LowerThreshold=30)
 # supprime tous les petits trucs qui trainent dans l'image
-kernel = itk.BinaryBallStructuringElement.US3(Radius=5)
+kernel = itk.BinaryBallStructuringElement[PT, dim]()
 r = kernel.GetRadius()
+r.Fill(5)
 # r.SetElement(2, 1)
 kernel.SetRadius(r)
 kernel.CreateStructuringElement()
-nOpen = itk.OpeningByReconstructionImageFilter.US3US3.New(nThreshold, Kernel=kernel)
-nConnected = itk.ConnectedComponentImageFilter.US3US3.New(nOpen)
-noyaux = itk.RelabelComponentImageFilter.US3US3.New(nConnected)
+nOpen = itk.OpeningByReconstructionImageFilter[IT, IT, kernel].New(nThreshold, Kernel=kernel)
 # il faut faire une fermeture pour lisser les noyaux
-nClose = itk.BinaryMorphologicalClosingImageFilter.US3US3.New(nOpen, SafeBorder=True)
-nk2 = nClose.GetKernel()
+nk2 = itk.BinaryBallStructuringElement[PT, dim]()
 nr2 = nk2.GetRadius()
 nr2.Fill(30)
 nr2[2] = 10
 nk2.SetRadius(nr2)
 nk2.CreateStructuringElement()
-nClose.SetKernel(nk2)
+nClose = itk.BinaryMorphologicalClosingImageFilter[IT, IT, nk2].New(nOpen, SafeBorder=True, Kernel=nk2)
+nConnected = itk.ConnectedComponentImageFilter[IT, LIT].New(nClose)
+noyaux = itk.RelabelComponentImageFilter[LIT, IT].New(nConnected)
 
 
 # les granules
@@ -43,27 +48,33 @@ nClose.SetKernel(nk2)
 # gThreshold = itk.BinaryThresholdImageFilter.US3US3.New(gHconvex, LowerThreshold=1)
 
 # essai de top-hat
-gkernel = itk.BinaryBallStructuringElement.US3(Radius=10)
+gkernel = itk.BinaryBallStructuringElement[PT, dim]()
 gr = gkernel.GetRadius()
+gr.Fill(10)
 gr.SetElement(2, 5)
 gkernel.SetRadius(gr)
 gkernel.CreateStructuringElement()
-gTopHat = itk.WhiteTopHatImageFilter.US3US3.New(median, Kernel=gkernel)
-gThreshold = itk.BinaryThresholdImageFilter.US3US3.New(gTopHat, LowerThreshold=70)
+gTopHat = itk.WhiteTopHatImageFilter[IT, IT, gkernel].New(median, Kernel=gkernel)
+gThreshold = itk.BinaryThresholdImageFilter[IT, IT].New(gTopHat, LowerThreshold=70)
 
-gAnd = itk.AndImageFilter.US3US3US3.New(nClose, gThreshold)
+# with an h-convex
+gHConvex = itk.HConvexImageFilter[IT, IT].New(median, Height=25)
+gThreshold2 = itk.BinaryThresholdImageFilter[IT, IT].New(gHConvex, LowerThreshold=1)
+
+gAnd = itk.AndImageFilter[IT, IT, IT].New(nClose, gThreshold2)
 # supprime les elts trop petits
-gkernel = itk.BinaryBallStructuringElement.US3(Radius=2)
+gkernel = itk.BinaryBallStructuringElement[PT, dim]()
 gr = gkernel.GetRadius()
+gr.Fill(2)
 gr.SetElement(2, 1)
 gkernel.SetRadius(gr)
 gkernel.CreateStructuringElement()
-gOpen = itk.OpeningByReconstructionImageFilter.US3US3.New(gAnd, Kernel=gkernel)
-gConnected = itk.ConnectedComponentImageFilter.US3US3.New(gOpen)
-granules = itk.RelabelComponentImageFilter.US3US3.New(gConnected)
+gOpen = itk.OpeningByReconstructionImageFilter[IT, IT, gkernel].New(gAnd, Kernel=gkernel)
+gConnected = itk.ConnectedComponentImageFilter[IT, LIT].New(gOpen)
+granules = itk.RelabelComponentImageFilter[LIT, IT].New(gConnected)
 
-gShape = itk.LabelShapeImageFilter.US3.New(granules)
-nShape = itk.LabelShapeImageFilter.US3.New(noyaux)
+gShape = itk.LabelShapeImageFilter[IT].New(granules)
+nShape = itk.LabelShapeImageFilter[IT].New(noyaux)
 
 # nPad = itk
 # nPad = itk.ConstantPadImageFilter.US3US3.New(nClose, PadBound=1)
@@ -82,11 +93,12 @@ nShape = itk.LabelShapeImageFilter.US3.New(noyaux)
 
 #fin de l'executable
 #ci dessous la generation de fichiers resultats
-gCast = itk.CastImageFilter.US3UC3.New(gShape)
-gWriter = itk.ImageFileWriter.UC3.New(gCast)
+# gCast = itk.CastImageFilter.US3UC3.New(gShape)
+gWriter = itk.ImageFileWriter[IT].New(gShape)
 
-nCast = itk.CastImageFilter.US3UC3.New(nShape)
-nWriter = itk.ImageFileWriter.UC3.New(nCast)
+# nCast = itk.CastImageFilter.US3UC3.New(nShape)
+nWriter = itk.ImageFileWriter[IT].New(nCast)
+
 for fName in sys.argv[1:] :
   reader.SetFileName(fName)
   
@@ -134,129 +146,3 @@ for fName in sys.argv[1:] :
 # 
 # v.SetInput(granules.GetOutput())
 # v.AdaptColorAndOpacity()
-
-
-
-def GetRange(img, imageType="US3") :
-  import itk
-  img.Update()
-  try :
-    comp = itk.MinimumMaximumImageCalculator[imageType].New(Image=img.GetOutput())
-  except TypeError:
-    comp = itk.MinimumMaximumImageCalculator[imageType].New(Image=img)
-  comp.Compute()
-  return (comp.GetMinimum(), comp.GetMaximum())
-
-
-class Viewer :
-  def __init__(self, filt=None, Input=None, MinOpacity=0.0, MaxOpacity=0.2, imageType='US3') :
-    import qt
-    import vtk
-    import itkvtk
-    from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-    self.__imageType__ = imageType
-    self.__MinOpacity__ = MinOpacity
-    self.__MaxOpacity__ = MaxOpacity
-    # every QT app needs an app
-    self.__app__ = qt.QApplication(['itkviewer'])
-    # create the widget
-    self.__widget__ = QVTKRenderWindowInteractor()
-    self.__ren__ = vtk.vtkRenderer()
-    self.__widget__.GetRenderWindow().AddRenderer(self.__ren__)
-    self.__itkvtkConverter__ = None
-    self.__volumeMapper__ = vtk.vtkVolumeTextureMapper2D()
-    self.__volume__ = vtk.vtkVolume()
-    self.__volumeProperty__ = vtk.vtkVolumeProperty()
-    self.__volume__.SetMapper(self.__volumeMapper__)
-    self.__volume__.SetProperty(self.__volumeProperty__)
-    self.__ren__.AddVolume(self.__volume__)
-    self.__outline__ = vtk.vtkOutlineFilter()
-    self.__outlineMapper__ = vtk.vtkPolyDataMapper()
-    self.__outlineMapper__.SetInput(self.__outline__.GetOutput())
-    self.__outlineActor__ = vtk.vtkActor()
-    self.__outlineActor__.SetMapper(self.__outlineMapper__)
-    self.__ren__.AddActor(self.__outlineActor__)
-    self.AdaptColorAndOpacity(0, 255)
-    if filt :
-      self.SetInput(filt.GetOutput())
-    if Input :
-      self.SetInput(Input)
-  def Render(self):
-    self.__ren__.Render()
-  def GetWidget(self) :
-    return self.__widget__
-  def GetRenderer(self) :
-    return self.__ren__
-  def GetConverter(self) :
-    return self.__itkvtkConverter__
-  def GetVolumeMapper(self) :
-    return self.__volumeMapper__
-  def GetVolume(self) :
-    return self.__volume__
-  def GetVolumeProperty(self) :
-    return self.__volumeProperty__
-  def Show(self) :
-    self.__widget__.show()
-  def Hide(self) :
-    self.__widget__.hide()
-  def SetInput(self, img) :
-    self.__input__ = img
-    if img :
-      import itkvtk
-      self.__itkvtkConverter__ = itkvtk.ImageToVTKImageFilter[self.__imageType__].New(Input=img)
-      self.__volumeMapper__.SetInput(self.__itkvtkConverter__.GetOutput())
-      self.__outline__.SetInput(self.__itkvtkConverter__.GetOutput())
-    self.Render()
-  def GetInput(self):
-    return self.__input__
-  def AdaptColorAndOpacity(self, minVal=None, maxVal=None):
-    if minVal == None or maxVal == None :
-      m, M = self.GetRange()
-      if minVal == None :
-        minVal = m
-      if maxVal == None :
-        maxVal = M
-    self.AdaptOpacity(minVal, maxVal)
-    self.AdaptColor(minVal, maxVal)
-  def AdaptOpacity(self, minVal=None, maxVal=None) :
-    import vtk
-    if minVal == None or maxVal == None :
-      m, M = self.GetRange()
-      if minVal == None :
-        minVal = m
-      if maxVal == None :
-        maxVal = M
-    opacityTransferFunction = vtk.vtkPiecewiseFunction()
-    opacityTransferFunction.AddPoint(minVal, self.__MinOpacity__)
-    opacityTransferFunction.AddPoint(maxVal, self.__MaxOpacity__)
-    self.__volumeProperty__.SetScalarOpacity(opacityTransferFunction)
-  def AdaptColor(self, minVal=None, maxVal=None):
-    import vtk
-    if minVal == None or maxVal == None :
-      m, M = self.GetRange()
-      if minVal == None :
-        minVal = m
-      if maxVal == None :
-        maxVal = M
-    colorTransferFunction = vtk.vtkColorTransferFunction()
-    colorTransferFunction.AddHSVPoint(minVal, 0.0, 0.0, 0.0)
-    colorTransferFunction.AddHSVPoint((maxVal-minVal)*0.25, 0.66, 1.0, 1.0)
-    colorTransferFunction.AddHSVPoint((maxVal-minVal)*0.5,  0.44, 1.0, 1.0)
-    colorTransferFunction.AddHSVPoint((maxVal-minVal)*0.75, 0.22, 1.0, 1.0)
-    colorTransferFunction.AddHSVPoint(maxVal,               0.0,  1.0, 1.0)
-    self.__volumeProperty__.SetColor(colorTransferFunction)
-    self.Render()
-  def GetRange(self) :
-    conv = self.GetConverter()
-    conv.Update()
-    return conv.GetOutput().GetScalarRange()
-  def GetMaxOpacity(self) :
-    return self.__MaxOpacity__
-  def GetMinOpacity(self) :
-    return self.__MinOpacity__
-  def SetMaxOpacity(self, val) :
-    self.__MaxOpacity__ = val
-    self.AdaptColorAndOpacity()
-  def SetMinOpacity(self, val) :
-    self.__MinOpacity__ = val
-    self.AdaptColorAndOpacity()
