@@ -97,7 +97,7 @@ nShape = itk.LabelShapeImageFilter[IT].New(noyaux)
 gWriter = itk.ImageFileWriter[IT].New(gShape)
 
 # nCast = itk.CastImageFilter.US3UC3.New(nShape)
-nWriter = itk.ImageFileWriter[IT].New(nCast)
+nWriter = itk.ImageFileWriter[IT].New(nShape)
 
 for fName in sys.argv[1:] :
   reader.SetFileName(fName)
